@@ -1,4 +1,4 @@
-# 🌿 Indigenous Knowledge Ledger
+Indigenous Knowledge Ledger
 
 A decentralized platform preserving and protecting indigenous knowledge using blockchain technology.
 
@@ -85,6 +85,29 @@ The implementation includes:
 - Voting functionality
 - Verification system
 - Royalty tracking
-
 Ready for initial testing and deployment.
+
+## Token Staking for Voting Power
+
+4. **Token Staking**
+    - Stake tokens to gain enhanced voting power
+    - Unstake tokens when no longer needed
+    - Voting power increases with staked amount
+
+### Stake Tokens
+```clarity
+(contract-call? .indigenous-knowledge-ledger stake-tokens u50)
+```
+
+### Unstake Tokens
+```clarity
+(contract-call? .indigenous-knowledge-ledger unstake-tokens u20)
+```
+
+### Vote with Enhanced Power
+```clarity
+(contract-call? .indigenous-knowledge-ledger vote-contribution u1)
+```
+Voting power = 1 + (staked tokens / minimum voting tokens)
+
 

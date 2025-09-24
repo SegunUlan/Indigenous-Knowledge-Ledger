@@ -5,6 +5,7 @@
 (define-constant ERR-INSUFFICIENT-TOKENS (err u104))
 (define-constant ERR-INSUFFICIENT-PAYMENT (err u105))
 (define-constant ERR-KNOWLEDGE-NOT-LICENSED (err u106))
+(define-constant ERR-INSUFFICIENT-STAKE (err u107))
 
 (define-fungible-token indigenous-token)
 
@@ -49,6 +50,14 @@
     }
 )
 
+(define-map token-stakes
+    principal
+    {
+        staked-amount: uint,
+        stake-timestamp: uint
+    }
+)
+
 (define-data-var contribution-counter uint u0)
 (define-data-var token-per-contribution uint u100)
 (define-data-var min-tokens-to-vote uint u10)
@@ -60,6 +69,30 @@
             reputation-score: u100,
             total-rewards: u0
         })
+        (ok true)
+    )
+)
+
+(define-public (stake-tokens (amount uint))
+    (let
+        (
+            (current-stake (default-to {staked-amount: u0, stake-timestamp: u0} (map-get? token-stakes tx-sender)))
+        )
+        (asserts! (>= (ft-get-balance indigenous-token tx-sender) amount) ERR-INSUFFICIENT-TOKENS)
+        (try! (ft-transfer? indigenous-token amount tx-sender (as-contract tx-sender)))
+        (map-set token-stakes tx-sender {staked-amount: (+ (get staked-amount current-stake) amount), stake-timestamp: burn-block-height})
+        (ok true)
+    )
+)
+
+(define-public (unstake-tokens (amount uint))
+    (let
+        (
+            (current-stake (unwrap! (map-get? token-stakes tx-sender) ERR-INSUFFICIENT-STAKE))
+        )
+        (asserts! (>= (get staked-amount current-stake) amount) ERR-INSUFFICIENT-STAKE)
+        (try! (as-contract (ft-transfer? indigenous-token amount tx-sender tx-sender)))
+        (map-set token-stakes tx-sender {staked-amount: (- (get staked-amount current-stake) amount), stake-timestamp: (get stake-timestamp current-stake)})
         (ok true)
     )
 )
@@ -100,18 +133,18 @@
 )
 
 (define-public (vote-contribution (contribution-id uint))
-    (let 
+    (let
         (
-
             (contribution-data (unwrap! (map-get? contributions contribution-id) ERR-CONTRIBUTION-NOT-FOUND))
             (voter-balance (ft-get-balance indigenous-token tx-sender))
+            (staked-amount (get staked-amount (default-to {staked-amount: u0, stake-timestamp: u0} (map-get? token-stakes tx-sender))))
+            (voting-power (+ u1 (/ staked-amount (var-get min-tokens-to-vote))))
         )
         (asserts! (>= voter-balance (var-get min-tokens-to-vote)) ERR-INSUFFICIENT-TOKENS)
         (asserts! (is-none (map-get? votes {contribution-id: contribution-id, voter: tx-sender})) ERR-ALREADY-VOTED)
         (map-set votes {contribution-id: contribution-id, voter: tx-sender} true)
-        (map-set contributions contribution-id 
-
-            (merge contribution-data {votes: (+ (get votes contribution-data) u1)})
+        (map-set contributions contribution-id
+            (merge contribution-data {votes: (+ (get votes contribution-data) voting-power)})
         )
         (ok true)
     )
