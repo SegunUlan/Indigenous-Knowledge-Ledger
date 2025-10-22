@@ -234,15 +234,101 @@
 )
 
 (define-read-only (has-access (contribution-id uint) (accessor principal))
-    (let 
+    (let
         (
             (contribution (unwrap! (map-get? contributions contribution-id) ERR-CONTRIBUTION-NOT-FOUND))
             (access-record (map-get? knowledge-access {contribution-id: contribution-id, accessor: accessor}))
         )
-        (ok (or 
+        (ok (or
             (is-eq accessor (get contributor contribution))
             (is-some access-record)
             (is-eq (get license-fee contribution) u0)
         ))
     )
+)
+
+(define-map governance-proposals
+    uint
+    {
+        proposer: principal,
+        parameter: (string-ascii 50),
+        new-value: uint,
+        votes-for: uint,
+        votes-against: uint,
+        end-block: uint,
+        executed: bool
+    }
+)
+
+(define-map proposal-votes
+    {proposal-id: uint, voter: principal}
+    bool
+)
+
+(define-data-var proposal-counter uint u0)
+
+(define-public (propose-parameter-change (parameter (string-ascii 50)) (new-value uint))
+    (let
+        (
+            (proposal-id (+ (var-get proposal-counter) u1))
+            (staked-amount (get staked-amount (default-to {staked-amount: u0, stake-timestamp: u0} (map-get? token-stakes tx-sender))))
+        )
+        (asserts! (>= staked-amount u100) ERR-INSUFFICIENT-STAKE)
+        (asserts! (or (is-eq parameter "token-per-contribution") (is-eq parameter "min-tokens-to-vote")) ERR-INVALID-CONTRIBUTION)
+        (map-set governance-proposals proposal-id {
+            proposer: tx-sender,
+            parameter: parameter,
+            new-value: new-value,
+            votes-for: u0,
+            votes-against: u0,
+            end-block: (+ burn-block-height u1440),
+            executed: false
+        })
+        (var-set proposal-counter proposal-id)
+        (ok proposal-id)
+    )
+)
+
+(define-public (vote-on-proposal (proposal-id uint) (vote bool))
+    (let
+        (
+            (proposal (unwrap! (map-get? governance-proposals proposal-id) ERR-CONTRIBUTION-NOT-FOUND))
+            (voter-balance (ft-get-balance indigenous-token tx-sender))
+            (staked-amount (get staked-amount (default-to {staked-amount: u0, stake-timestamp: u0} (map-get? token-stakes tx-sender))))
+            (voting-power (+ u1 (/ staked-amount (var-get min-tokens-to-vote))))
+        )
+        (asserts! (>= voter-balance (var-get min-tokens-to-vote)) ERR-INSUFFICIENT-TOKENS)
+        (asserts! (< burn-block-height (get end-block proposal)) ERR-NOT-AUTHORIZED)
+        (asserts! (is-none (map-get? proposal-votes {proposal-id: proposal-id, voter: tx-sender})) ERR-ALREADY-VOTED)
+        (map-set proposal-votes {proposal-id: proposal-id, voter: tx-sender} true)
+        (if vote
+            (map-set governance-proposals proposal-id (merge proposal {votes-for: (+ (get votes-for proposal) voting-power)}))
+            (map-set governance-proposals proposal-id (merge proposal {votes-against: (+ (get votes-against proposal) voting-power)}))
+        )
+        (ok true)
+    )
+)
+
+(define-public (execute-proposal (proposal-id uint))
+    (let
+        (
+            (proposal (unwrap! (map-get? governance-proposals proposal-id) ERR-CONTRIBUTION-NOT-FOUND))
+        )
+        (asserts! (>= burn-block-height (get end-block proposal)) ERR-NOT-AUTHORIZED)
+        (asserts! (not (get executed proposal)) ERR-NOT-AUTHORIZED)
+        (asserts! (> (get votes-for proposal) (get votes-against proposal)) ERR-NOT-AUTHORIZED)
+        (if (is-eq (get parameter proposal) "token-per-contribution")
+            (var-set token-per-contribution (get new-value proposal))
+            (if (is-eq (get parameter proposal) "min-tokens-to-vote")
+                (var-set min-tokens-to-vote (get new-value proposal))
+                false
+            )
+        )
+        (map-set governance-proposals proposal-id (merge proposal {executed: true}))
+        (ok true)
+    )
+)
+
+(define-read-only (get-proposal (proposal-id uint))
+    (ok (map-get? governance-proposals proposal-id))
 )

@@ -111,3 +111,46 @@ Ready for initial testing and deployment.
 Voting power = 1 + (staked tokens / minimum voting tokens)
 
 
+
+### License Knowledge
+```clarity
+(contract-call? .indigenous-knowledge-ledger license-knowledge u1)
+```
+
+### Set License Fee
+```clarity
+(contract-call? .indigenous-knowledge-ledger set-license-fee u1 u50)
+```
+
+### Check Access
+```clarity
+(contract-call? .indigenous-knowledge-ledger has-access u1 tx-sender)
+```
+
+## 🏛️ Governance System
+
+5. **Decentralized Governance**
+    - Propose changes to protocol parameters
+    - Community voting on proposals
+    - Stake-weighted voting power
+    - Automatic execution of passed proposals
+
+### Propose Parameter Change
+```clarity
+(contract-call? .indigenous-knowledge-ledger propose-parameter-change "token-per-contribution" u150)
+```
+
+### Vote on Proposal
+```clarity
+(contract-call? .indigenous-knowledge-ledger vote-on-proposal u1 true)
+```
+
+### Execute Proposal
+```clarity
+(contract-call? .indigenous-knowledge-ledger execute-proposal u1)
+```
+
+### View Proposal
+```clarity
+(contract-call? .indigenous-knowledge-ledger get-proposal u1)
+```
